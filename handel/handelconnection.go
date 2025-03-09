@@ -20,7 +20,7 @@ var (
 func ConnectionManagement(conn net.Conn) {
 	defer conn.Close()
 
-  if len(users) > 9 {
+  if len(users) == 10 {
     conn.Write([]byte("The maximum number of connections allowed has been reached. Please try again later."))
     return
   }
