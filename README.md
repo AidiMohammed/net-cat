@@ -43,6 +43,6 @@ Ce projet implémente un serveur de chat TCP en Go permettant aux clients de se 
 
 
 ## Auteur
-Développé par [Mohammed aidi] maidi
-Développé par [Mohammed aidi] maidi
+1. Développé par [Mohammed aidi] maidi
+2. Développé par [Abderrahmane Ben Yahya] Abenyahya
 
