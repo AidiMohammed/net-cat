@@ -20,6 +20,11 @@ var (
 func ConnectionManagement(conn net.Conn) {
 	defer conn.Close()
 
+  if len(users) > 9 {
+    conn.Write([]byte("The maximum number of connections allowed has been reached. Please try again later."))
+    return
+  }
+
 	fmt.Println("Client connecté : ", conn.RemoteAddr())
 	messageWelcom,err := tools.WelcomMessage()
 	if err != nil {
@@ -39,50 +44,80 @@ func ConnectionManagement(conn net.Conn) {
 	name = strings.TrimSpace(name)
 
 	mutex.Lock()
-	users[conn] = name
-	fmt.Printf("Add new user %v address %v \n",name,conn.RemoteAddr())
+    found := false
+    for _,nameValue := range users {
+      if nameValue == name {
+        found = true
+        break
+      }
+    }
 
-	for valueConn,valueName := range users {
-		if valueName != name {
-			valueConn.Write([]byte(fmt.Sprintf("%v has joined our chat...\n",name)))
-		}
-	}
+    if !found {
+      users[conn] = name
+      fmt.Printf("Add new user %v address %v \n",name,conn.RemoteAddr())
+      
+      for valueConn,valueName := range users {
+        if valueName != name {
+          valueConn.Write([]byte(fmt.Sprintf("%v has joined our chat...\n",name)))
+        }
+      }
+    } else {
+      fmt.Printf("User %s deconnecté %v",conn.RemoteAddr())
+      return
+    }
 	mutex.Unlock()
 
-	mutex.Lock()
-	for _,histo := range historiqueMessage {
-		conn.Write([]byte(histo))
-	}
-	mutex.Unlock()
+  broadCastHistoriqueMessage(conn)
 
 	for {
 		now := time.Now()
 		message,err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Printf(fmt.Sprintf("User %s déconnecté.\n",name))
-			mutex.Lock()
-			delete(users,conn)
-			fmt.Printf(fmt.Sprintf("delete user : %v\n",name))
+      broadCastMessage(fmt.Sprintf("%v to disconnect from chat ...",name),conn)
+      mutex.Lock()
+        delete(users,conn)
+        fmt.Printf(fmt.Sprintf("delete user : %v\n",name))
 			mutex.Unlock()
-			return
+			fmt.Printf(fmt.Sprintf("User %s déconnecté.\n",name))
+			break
 		}
 
 		message = strings.TrimSpace(message)
 
-		if len(message) > 0 {
-			messageToUser := fmt.Sprintf("[%v][%v]:%v\n",now.Format("2006-01-02 15:04:05"),name,message)
-			conn.Write([]byte(messageToUser))	
-			mutex.Lock()
-			historiqueMessage = append(historiqueMessage,messageToUser)
-			mutex.Unlock()
-
-			for keyConn,valueName := range users {
-				if valueName != name {
-					keyConn.Write([]byte(messageToUser))
-				}
-			}
+		if message != "" {
+			messageBroadcast := fmt.Sprintf("[%v][%v]:%v\n",now.Format("2006-01-02 15:04:05"),name,message)	
+      saveHistoriqueMessage(messageBroadcast)
+      broadCastMessage(messageBroadcast,conn)
 		}
-
 	}
+}
 
+func broadCastMessage(message string,sender net.Conn) {
+	if message != "" {
+    mutex.Lock()
+		  for keyConn,valueName := range users {
+        if keyConn == sender {
+          keyConn.Write([]byte(fmt.Sprintf("\033[1A\033[2K%v",message)))
+          continue
+        }
+		  	keyConn.Write([]byte(message))
+        fmt.Printf("brodcast message to user %v addres : %v\n",keyConn.RemoteAddr(),valueName)
+		  }
+    mutex.Unlock()
+	}
+}
+
+func saveHistoriqueMessage(message string) {
+  mutex.Lock()
+    historiqueMessage = append(historiqueMessage,message)
+  mutex.Unlock()
+}
+
+func broadCastHistoriqueMessage(conn net.Conn){
+  mutex.Lock()
+    for _,message := range historiqueMessage {
+      conn.Write([]byte(message))
+      fmt.Printf("Brodcast Historique message to ip %v message (%v) \n",conn.RemoteAddr(),strings.TrimSuffix(message,"\n"))
+    }
+  mutex.Unlock()
 }
