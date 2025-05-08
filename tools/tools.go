@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"os"
+	"unicode"
 )
 
 const COLOR_RED = 31
@@ -22,4 +23,13 @@ func WelcomMessage() (string,error) {
 
 	return string(file),nil
 	
+}
+
+func IsVisibleString(s string) bool {
+    for _, r := range s {
+        if unicode.IsSpace(r) && r != ' ' {
+            return false
+        }
+    }
+    return true
 }

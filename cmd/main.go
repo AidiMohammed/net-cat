@@ -13,9 +13,13 @@ func main() {
 	var portNumber uint
 	var err error
 
-	portNumber = config.GetPort()
+	portNumber,err = config.GetPort()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	listener, err := net.Listen("tcp",fmt.Sprintf("localhost:%v",portNumber)) 
+	listener, err := net.Listen("tcp",fmt.Sprintf(":%v",portNumber)) 
 	defer listener.Close()
 	if err != nil {
 		message := tools.ColorString(tools.COLOR_RED,"Erreur de démarrage de serveur : ")
