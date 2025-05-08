@@ -19,11 +19,11 @@ var (
 
 func ConnectionManagement(conn net.Conn) {
 	defer conn.Close()
-
-  if len(users) == 10 {
-    conn.Write([]byte("The maximum number of connections allowed has been reached. Please try again later."))
-    return
-  }
+  	var nameClient string
+  	if len(users) == 10 {
+    	conn.Write([]byte("The maximum number of connections allowed has been reached. Please try again later."))
+    	return
+  	}
 
 	fmt.Println("Client connecté : ", conn.RemoteAddr())
 	messageWelcom,err := tools.WelcomMessage()
@@ -35,75 +35,104 @@ func ConnectionManagement(conn net.Conn) {
 	conn.Write([]byte(messageWelcom))
 
 	reader := bufio.NewReader(conn)
-	name,err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Println("Erreur de lecture : ",err)
-		return
+	
+	for {
+		conn.Write([]byte("\n[ENTER YOUR NAME]:"))
+		name,err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Erreur de lecture : ",err)
+			return
+		}
+		if name == ""  {
+			conn.Write([]byte("Notice: Provide a non-blank name: "))
+			continue
+		}
+		name = strings.ReplaceAll(name, "\n", "")
+ 		if (!tools.IsVisibleString(name)) {
+			conn.Write([]byte("Notice: Provide a name that holds only printable characters:"))
+			continue 
+		}
+		name = strings.TrimSpace(name)
+		foundName := false
+		mutex.Lock()
+		for _,nameValue := range users {
+			if nameValue == name {
+				foundName = true
+				break
+			}
+		}
+		if !foundName {
+
+			if len(name) > 50  {
+				conn.Write([]byte("Notice: : the size name is very long (max size : 50)"))
+				continue
+			}
+			users[conn] = name
+			mutex.Unlock()
+			fmt.Printf("Add new user %v address %v \n",name,conn.RemoteAddr())
+			broadCastMessage(fmt.Sprintf("%v has joined our chat ...\n",name),conn);
+			nameClient = name
+			break
+		} else {
+			mutex.Unlock()
+			conn.Write([]byte(fmt.Sprintf("Notice: This name (%v) is already taken, try another one: ",name)))
+			continue
+		}
 	}
 
-	name = strings.TrimSpace(name)
-
-	mutex.Lock()
-    found := false
-    for _,nameValue := range users {
-      if nameValue == name {
-        found = true
-        break
-      }
-    }
-
-    if !found {
-      users[conn] = name
-      fmt.Printf("Add new user %v address %v \n",name,conn.RemoteAddr())
-      
-      for valueConn,valueName := range users {
-        if valueName != name {
-          valueConn.Write([]byte(fmt.Sprintf("%v has joined our chat...\n",name)))
-        }
-      }
-    } else {
-      fmt.Printf("User %s deconnecté %v",conn.RemoteAddr())
-      return
-    }
-	mutex.Unlock()
-
-  broadCastHistoriqueMessage(conn)
+  	setHistoriqueMessage(conn)
 
 	for {
 		now := time.Now()
+		headerMessage := fmt.Sprintf("[%v][%v]:",now.Format("2006-01-02 15:04:05"),nameClient)
 		message,err := reader.ReadString('\n')
 		if err != nil {
-      broadCastMessage(fmt.Sprintf("%v to disconnect from chat ...",name),conn)
-      mutex.Lock()
+      	broadCastMessage(fmt.Sprintf("%v to disconnect from chat ...",nameClient),conn)
+      	mutex.Lock()
         delete(users,conn)
-        fmt.Printf(fmt.Sprintf("delete user : %v\n",name))
+        fmt.Printf(fmt.Sprintf("delete user : %v\n",nameClient))
 			mutex.Unlock()
-			fmt.Printf(fmt.Sprintf("User %s déconnecté.\n",name))
+			fmt.Printf(fmt.Sprintf("User %s déconnecté.\n",nameClient))
 			break
 		}
-
+		message = strings.ReplaceAll(message, "\n", "")
+		if(!tools.IsVisibleString(message)) {
+			conn.Write([]byte("Notice: Provide a messsage that holds only printable characters:"))
+			continue
+		}
 		message = strings.TrimSpace(message)
 
+		if len(message) > 500  {
+			conn.Write([]byte("Notice: : the size message is very long (max size : 500)"))
+			continue
+		}
+
 		if message != "" {
-			messageBroadcast := fmt.Sprintf("[%v][%v]:%v\n",now.Format("2006-01-02 15:04:05"),name,message)	
-      saveHistoriqueMessage(messageBroadcast)
-      broadCastMessage(messageBroadcast,conn)
+      		saveHistoriqueMessage(headerMessage+message)
+      		broadCastMessage(headerMessage+message,conn)
+			conn.Write([]byte(headerMessage+message))
 		}
 	}
 }
 
+// broadCastMessage sends a message to all users except the sender
 func broadCastMessage(message string,sender net.Conn) {
-	if message != "" {
+	if message == "" {
+		return
+	}
     mutex.Lock()
-		  for keyConn,valueName := range users {
+	defer mutex.Unlock()
+
+	for keyConn,valueName := range users {
         if keyConn == sender {
-          keyConn.Write([]byte(fmt.Sprintf("\033[1A\033[2K%v",message)))
-          continue
+		  continue
         }
-		  	keyConn.Write([]byte(message))
+		_,err := keyConn.Write([]byte(message))
+		if err != nil {
+			fmt.Println("Erreur d'envoi à %v : %v",valueName, err)
+			continue
+		}
         fmt.Printf("brodcast message to user %v addres : %v\n",keyConn.RemoteAddr(),valueName)
-		  }
-    mutex.Unlock()
 	}
 }
 
@@ -113,7 +142,7 @@ func saveHistoriqueMessage(message string) {
   mutex.Unlock()
 }
 
-func broadCastHistoriqueMessage(conn net.Conn){
+func setHistoriqueMessage(conn net.Conn){
   mutex.Lock()
     for _,message := range historiqueMessage {
       conn.Write([]byte(message))
