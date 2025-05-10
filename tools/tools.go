@@ -25,9 +25,9 @@ func WelcomMessage() (string,error) {
 	
 }
 
-func IsVisibleString(s string) bool {
-    for _, r := range s {
-        if unicode.IsSpace(r) && r != ' ' {
+func IsValidString(s string) bool {
+    for _, v := range s {
+        if !unicode.IsPrint(v) || v == '\t' {
             return false
         }
     }

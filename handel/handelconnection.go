@@ -43,21 +43,21 @@ func ConnectionManagement(conn net.Conn) {
 			fmt.Println("Erreur de lecture : ",err)
 			return
 		}
+		name = strings.TrimSpace(name)
 		if name == ""  {
 			conn.Write([]byte("Notice: Provide a non-blank name: "))
 			continue
 		}
-		name = strings.ReplaceAll(name, "\n", "")
- 		if (!tools.IsVisibleString(name)) {
-			conn.Write([]byte("Notice: Provide a name that holds only printable characters:"))
-			continue 
+		if !tools.IsValidString(name) {
+			conn.Write([]byte("Notice: Provide a name that holds only printable characters"))
+			continue
 		}
-		name = strings.TrimSpace(name)
 		foundName := false
 		mutex.Lock()
 		for _,nameValue := range users {
 			if nameValue == name {
 				foundName = true
+				mutex.Unlock()
 				break
 			}
 		}
@@ -70,7 +70,7 @@ func ConnectionManagement(conn net.Conn) {
 			users[conn] = name
 			mutex.Unlock()
 			fmt.Printf("Add new user %v address %v \n",name,conn.RemoteAddr())
-			broadCastMessage(fmt.Sprintf("%v has joined our chat ...\n",name),conn);
+			broadCastMessage(fmt.Sprintf("\n%v has joined our chat ...",name),conn);
 			nameClient = name
 			break
 		} else {
@@ -85,20 +85,16 @@ func ConnectionManagement(conn net.Conn) {
 	for {
 		now := time.Now()
 		headerMessage := fmt.Sprintf("[%v][%v]:",now.Format("2006-01-02 15:04:05"),nameClient)
+		conn.Write([]byte(headerMessage))
 		message,err := reader.ReadString('\n')
 		if err != nil {
-      	broadCastMessage(fmt.Sprintf("%v to disconnect from chat ...",nameClient),conn)
-      	mutex.Lock()
-        delete(users,conn)
-        fmt.Printf(fmt.Sprintf("delete user : %v\n",nameClient))
+      		broadCastMessage(fmt.Sprintf("%v to disconnect from chat ...",nameClient),conn)
+      		mutex.Lock()
+        	delete(users,conn)
 			mutex.Unlock()
+        	fmt.Printf(fmt.Sprintf("delete user : %v\n",nameClient))
 			fmt.Printf(fmt.Sprintf("User %s déconnecté.\n",nameClient))
 			break
-		}
-		message = strings.ReplaceAll(message, "\n", "")
-		if(!tools.IsVisibleString(message)) {
-			conn.Write([]byte("Notice: Provide a messsage that holds only printable characters:"))
-			continue
 		}
 		message = strings.TrimSpace(message)
 
@@ -108,9 +104,8 @@ func ConnectionManagement(conn net.Conn) {
 		}
 
 		if message != "" {
-      		saveHistoriqueMessage(headerMessage+message)
-      		broadCastMessage(headerMessage+message,conn)
-			conn.Write([]byte(headerMessage+message))
+      		saveHistoriqueMessage(headerMessage+message+"\n")
+      		broadCastMessage("\n"+headerMessage+message,conn)
 		}
 	}
 }
@@ -127,7 +122,9 @@ func broadCastMessage(message string,sender net.Conn) {
         if keyConn == sender {
 		  continue
         }
-		_,err := keyConn.Write([]byte(message))
+		now := time.Now()
+		headerMessage := fmt.Sprintf("[%v][%v]:",now.Format("2006-01-02 15:04:05"),valueName)
+		_,err := keyConn.Write([]byte(message+"\n"+headerMessage))
 		if err != nil {
 			fmt.Println("Erreur d'envoi à %v : %v",valueName, err)
 			continue
